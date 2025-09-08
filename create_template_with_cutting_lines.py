@@ -32,10 +32,10 @@ x_coords = [
 
 # Define y coordinates for horizontal dotted lines
 y_coords = [
-    589.4643884,
-    323.0078633,
-    288.9921367,
-    22.53561163,
+    580.9604567,
+    331.511795,
+    280.488205,
+    31.03954328,
 ]
 
 # Draw vertical dotted lines at specified x coordinates
