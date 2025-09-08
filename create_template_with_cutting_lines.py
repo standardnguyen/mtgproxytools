@@ -39,7 +39,7 @@ y_coords = [
 ]
 
 # Draw vertical dotted lines at specified x coordinates
-c.setDash([2, 4])  # Set dash pattern: 2 points on, 4 points off
+c.setDash([4, 1])  # Set dash pattern: 4 points on, 1 point off
 c.setLineWidth(0.5)
 c.setStrokeColor(black)
 for x in x_coords:
