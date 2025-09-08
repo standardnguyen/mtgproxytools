@@ -1,4 +1,5 @@
 .venv/
 *.png
 *.jpg
-assets
+assets/
+output/
