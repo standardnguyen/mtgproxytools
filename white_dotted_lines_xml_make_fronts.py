@@ -12,6 +12,10 @@ from io import BytesIO
 import subprocess
 import sys
 
+# Configuration for offset
+DEFAULT_OFFSET_CM = 0.11  # Default offset in centimeters
+OFFSET_POINTS = DEFAULT_OFFSET_CM * 10 * 72 / 25.4  # Convert cm to points (0.11cm ≈ 3.118 points)
+
 def check_and_install_ghostscript():
     """Check if Ghostscript is available for PDF compression"""
     try:
@@ -92,9 +96,9 @@ def check_images_exist(slot_list, fronts_dir):
     
     return missing_images, existing_images
 
-def draw_edge_cut_lines(overlay_canvas, page_width, page_height):
-    """Draw light gray dotted lines at the edges for cutting guides"""
-    # Define y coordinates for horizontal dotted lines
+def draw_edge_cut_lines(overlay_canvas, page_width, page_height, x_offset=OFFSET_POINTS):
+    """Draw light gray dotted lines at the edges for cutting guides with offset"""
+    # Define y coordinates for horizontal dotted lines (no change needed for horizontal lines' y-coords)
     y_coords = [
         580.9604567,
         331.511795,
@@ -102,16 +106,16 @@ def draw_edge_cut_lines(overlay_canvas, page_width, page_height):
         31.03954328,
     ]
     
-    # Define x coordinates for vertical dotted lines
+    # Define x coordinates for vertical dotted lines (these will be offset)
     x_coords = [
-        191.9056404,
-        13.3230757,
-        387.4960683,
-        208.9135037,
-        583.0864963,
-        404.5039317,
-        778.6769243,
-        600.0943596,
+        191.9056404 + x_offset,
+        13.3230757 + x_offset,
+        387.4960683 + x_offset,
+        208.9135037 + x_offset,
+        583.0864963 + x_offset,
+        404.5039317 + x_offset,
+        778.6769243 + x_offset,
+        600.0943596 + x_offset,
     ]
     
     # Set up line style - light gray dotted lines
@@ -123,11 +127,12 @@ def draw_edge_cut_lines(overlay_canvas, page_width, page_height):
     edge_width_horizontal = 2 * 72  # 144 points
     
     # Draw horizontal dotted lines only at the edges (2 inches from each side)
+    # Apply offset to horizontal lines as well
     for y in y_coords:
-        # Left edge (first 2 inches)
-        overlay_canvas.line(0, y, edge_width_horizontal, y)
-        # Right edge (last 2 inches)
-        overlay_canvas.line(page_width - edge_width_horizontal, y, page_width, y)
+        # Left edge (first 2 inches) - shifted right by offset
+        overlay_canvas.line(0 + x_offset, y, edge_width_horizontal + x_offset, y)
+        # Right edge (last 2 inches) - shifted right by offset
+        overlay_canvas.line(page_width - edge_width_horizontal + x_offset, y, page_width + x_offset, y)
     
     # Vertical lines: 1 inch on each end, 2 inches in the middle
     edge_height_vertical = 1 * 72  # 72 points (1 inch)
@@ -135,7 +140,7 @@ def draw_edge_cut_lines(overlay_canvas, page_width, page_height):
     middle_start = (page_height / 2) - (middle_height / 2)
     middle_end = (page_height / 2) + (middle_height / 2)
     
-    # Draw vertical dotted lines
+    # Draw vertical dotted lines (already offset in x_coords)
     for x in x_coords:
         # Bottom edge (first 1 inch)
         overlay_canvas.line(x, 0, x, edge_height_vertical)
@@ -147,18 +152,18 @@ def draw_edge_cut_lines(overlay_canvas, page_width, page_height):
     # Reset to solid lines and default color for any subsequent drawing
     overlay_canvas.setDash([])
 
-def create_page_with_cards(page_card_ids, page_width, page_height, fronts_dir):
-    """Create a single page with up to 8 cards using card IDs, with edge cut lines on top"""
-    # Define points with their coordinates (same as original)
+def create_page_with_cards(page_card_ids, page_width, page_height, fronts_dir, x_offset=OFFSET_POINTS):
+    """Create a single page with up to 8 cards using card IDs, with edge cut lines on top and offset"""
+    # Define points with their coordinates (apply offset to x-coordinates)
     points = [
-        ("A", 102.614358, 456.2361258),
-        ("B", 298.204786, 456.2361258),
-        ("C", 493.795214, 456.2361258),
-        ("D", 689.385642, 456.2361258),
-        ("E", 102.614358, 155.7638742),
-        ("F", 298.204786, 155.7638742),
-        ("G", 493.795214, 155.7638742),
-        ("H", 689.385642, 155.7638742)
+        ("A", 102.614358 + x_offset, 456.2361258),
+        ("B", 298.204786 + x_offset, 456.2361258),
+        ("C", 493.795214 + x_offset, 456.2361258),
+        ("D", 689.385642 + x_offset, 456.2361258),
+        ("E", 102.614358 + x_offset, 155.7638742),
+        ("F", 298.204786 + x_offset, 155.7638742),
+        ("G", 493.795214 + x_offset, 155.7638742),
+        ("H", 689.385642 + x_offset, 155.7638742)
     ]
     
     # Create a canvas in memory
@@ -206,8 +211,8 @@ def create_page_with_cards(page_card_ids, page_width, page_height, fronts_dir):
                 print(f"  Error processing {image_filename}: {e}")
                 continue
     
-    # Draw edge cut lines ON TOP of the cards
-    draw_edge_cut_lines(overlay_canvas, page_width, page_height)
+    # Draw edge cut lines ON TOP of the cards with the same offset
+    draw_edge_cut_lines(overlay_canvas, page_width, page_height, x_offset)
     
     overlay_canvas.save()
     packet.seek(0)
@@ -246,6 +251,12 @@ def main():
     uncompressed_dir = os.path.join(output_dir, "uncompressed_pdfs")
     compressed_dir = os.path.join(output_dir, "compressed_pdfs")
     final_pdf = os.path.join(output_dir, "fronts.pdf")
+    
+    # Offset configuration (can be modified here or passed as parameter)
+    x_offset_cm = DEFAULT_OFFSET_CM  # Change this value to adjust offset
+    x_offset_points = x_offset_cm * 10 * 72 / 25.4  # Convert cm to points
+    
+    print(f"Using horizontal offset: {x_offset_cm}cm ({x_offset_points:.2f} points)")
     
     # Set up page size (landscape 8.5x11 inches)
     page_width, page_height = landscape(letter)
@@ -317,8 +328,8 @@ def main():
         
         print(f"Page {page_num + 1}: slots {start_slot}-{end_slot - 1}")
         
-        # Create overlay with cards and edge cut lines
-        overlay_packet = create_page_with_cards(page_card_ids, page_width, page_height, fronts_dir)
+        # Create overlay with cards and edge cut lines (with offset)
+        overlay_packet = create_page_with_cards(page_card_ids, page_width, page_height, fronts_dir, x_offset_points)
         
         # Merge with template
         overlay_reader = PdfReader(overlay_packet)
@@ -384,7 +395,8 @@ def main():
     print(f"Compressed PDFs: {compressed_dir}")
     print(f"Total pages generated: {total_pages}")
     print(f"Total cards printed: {len(slot_list)}")
-    print("Note: Light gray dotted lines added at edges for cutting guides")
+    print(f"Note: Light gray dotted lines added at edges for cutting guides")
+    print(f"Note: Content shifted right by {x_offset_cm}cm")
 
 if __name__ == "__main__":
     main()
