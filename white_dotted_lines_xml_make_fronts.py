@@ -313,10 +313,6 @@ def main():
     total_pages = (len(slot_list) + cards_per_page - 1) // cards_per_page
     print(f"Will generate {total_pages} pages")
     
-    # Load template PDF
-    template_reader = PdfReader(template_pdf)
-    template_page = template_reader.pages[0]
-    
     # Generate uncompressed pages
     print("\nGenerating uncompressed PDFs with edge cut lines...")
     uncompressed_files = []
@@ -331,7 +327,11 @@ def main():
         # Create overlay with cards and edge cut lines (with offset)
         overlay_packet = create_page_with_cards(page_card_ids, page_width, page_height, fronts_dir, x_offset_points)
         
-        # Merge with template
+        # Read template fresh for each page to avoid stacking
+        template_reader = PdfReader(template_pdf)
+        template_page = template_reader.pages[0]
+        
+        # Merge with overlay
         overlay_reader = PdfReader(overlay_packet)
         output_writer = PdfWriter()
         
@@ -339,7 +339,6 @@ def main():
         merged_page = template_page
         if len(overlay_reader.pages) > 0:
             overlay_page = overlay_reader.pages[0]
-            merged_page = template_page
             merged_page.merge_page(overlay_page)
         
         output_writer.add_page(merged_page)
