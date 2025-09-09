@@ -50,7 +50,7 @@ def parse_xml_cards(xml_path):
     return cards
 
 def create_slot_list(cards):
-    """Create a list where each index represents a slot and contains the image filename"""
+    """Create a list where each index represents a slot and contains the card ID"""
     slot_list = []
     
     for card in cards:
@@ -58,27 +58,41 @@ def create_slot_list(cards):
             # Ensure we have enough slots in our list
             while len(slot_list) <= slot:
                 slot_list.append(None)
-            slot_list[slot] = card['name']
+            slot_list[slot] = card['id']
     
     return slot_list
 
+def find_image_by_id(card_id, fronts_dir):
+    """Find an image file that contains the given card ID in its filename"""
+    if not card_id:
+        return None
+    
+    image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
+    
+    for filename in os.listdir(fronts_dir):
+        if any(filename.lower().endswith(ext) for ext in image_extensions):
+            if card_id in filename:
+                return filename
+    
+    return None
+
 def check_images_exist(slot_list, fronts_dir):
-    """Check if all required images exist"""
+    """Check if all required images exist by looking for card IDs in filenames"""
     missing_images = []
     existing_images = []
     
-    for i, image_name in enumerate(slot_list):
-        if image_name:
-            image_path = os.path.join(fronts_dir, image_name)
-            if os.path.exists(image_path):
-                existing_images.append(image_name)
+    for i, card_id in enumerate(slot_list):
+        if card_id:
+            image_filename = find_image_by_id(card_id, fronts_dir)
+            if image_filename:
+                existing_images.append(image_filename)
             else:
-                missing_images.append((i, image_name))
+                missing_images.append((i, card_id))
     
     return missing_images, existing_images
 
-def create_page_with_cards(page_images, page_width, page_height, fronts_dir):
-    """Create a single page with up to 8 cards"""
+def create_page_with_cards(page_card_ids, page_width, page_height, fronts_dir):
+    """Create a single page with up to 8 cards using card IDs"""
     # Define points with their coordinates (same as original)
     points = [
         ("A", 102.614358, 456.2361258),
@@ -101,9 +115,16 @@ def create_page_with_cards(page_images, page_width, page_height, fronts_dir):
     
     # Process each image position
     for i, (label, x, y) in enumerate(points):
-        if i < len(page_images) and page_images[i]:
-            image_name = page_images[i]
-            image_path = os.path.join(fronts_dir, image_name)
+        if i < len(page_card_ids) and page_card_ids[i]:
+            card_id = page_card_ids[i]
+            
+            # Find the image file for this card ID
+            image_filename = find_image_by_id(card_id, fronts_dir)
+            if not image_filename:
+                print(f"  Warning: No image found for card ID {card_id}")
+                continue
+            
+            image_path = os.path.join(fronts_dir, image_filename)
             
             try:
                 # Open and process the image
@@ -123,10 +144,10 @@ def create_page_with_cards(page_images, page_width, page_height, fronts_dir):
                                        width=target_width_points,
                                        height=target_height_points)
                 
-                print(f"  Placed {image_name} at point {label}")
+                print(f"  Placed {image_filename} at point {label}")
                 
             except Exception as e:
-                print(f"  Error processing {image_name}: {e}")
+                print(f"  Error processing {image_filename}: {e}")
                 continue
     
     overlay_canvas.save()
@@ -201,18 +222,18 @@ def main():
     cards = parse_xml_cards(xml_path)
     print(f"Found {len(cards)} cards in XML")
     
-    # Create slot list
+    # Create slot list (now contains card IDs instead of filenames)
     slot_list = create_slot_list(cards)
     print(f"Total slots needed: {len(slot_list)}")
     
-    # Check if all images exist
+    # Check if all images exist (now searches by card ID)
     print("\nChecking images...")
     missing_images, existing_images = check_images_exist(slot_list, fronts_dir)
     
     if missing_images:
-        print("ERROR: Missing images:")
-        for slot, image_name in missing_images:
-            print(f"  Slot {slot}: {image_name}")
+        print("ERROR: Missing images for card IDs:")
+        for slot, card_id in missing_images:
+            print(f"  Slot {slot}: {card_id}")
         return
     
     print(f"All required images found ({len(set(existing_images))} unique images)")
@@ -233,12 +254,12 @@ def main():
     for page_num in range(total_pages):
         start_slot = page_num * cards_per_page
         end_slot = min(start_slot + cards_per_page, len(slot_list))
-        page_images = slot_list[start_slot:end_slot]
+        page_card_ids = slot_list[start_slot:end_slot]
         
         print(f"Page {page_num + 1}: slots {start_slot}-{end_slot - 1}")
         
-        # Create overlay with cards
-        overlay_packet = create_page_with_cards(page_images, page_width, page_height, fronts_dir)
+        # Create overlay with cards (now uses card IDs)
+        overlay_packet = create_page_with_cards(page_card_ids, page_width, page_height, fronts_dir)
         
         # Merge with template
         overlay_reader = PdfReader(overlay_packet)
