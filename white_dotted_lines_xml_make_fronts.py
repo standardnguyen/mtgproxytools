@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
-from reportlab.lib.colors import black
+from reportlab.lib.colors import lightgrey
 from PIL import Image
 import os
 import shutil
@@ -92,8 +92,63 @@ def check_images_exist(slot_list, fronts_dir):
     
     return missing_images, existing_images
 
+def draw_edge_cut_lines(overlay_canvas, page_width, page_height):
+    """Draw light gray dotted lines at the edges for cutting guides"""
+    # Define y coordinates for horizontal dotted lines
+    y_coords = [
+        580.9604567,
+        331.511795,
+        280.488205,
+        31.03954328,
+    ]
+    
+    # Define x coordinates for vertical dotted lines
+    x_coords = [
+        191.9056404,
+        13.3230757,
+        387.4960683,
+        208.9135037,
+        583.0864963,
+        404.5039317,
+        778.6769243,
+        600.0943596,
+    ]
+    
+    # Set up line style - light gray dotted lines
+    overlay_canvas.setDash([4, 1])  # Set dash pattern: 4 points on, 1 point off
+    overlay_canvas.setLineWidth(0.5)
+    overlay_canvas.setStrokeColor(lightgrey)
+    
+    # Horizontal lines: 2 inches (144 points) on each edge
+    edge_width_horizontal = 2 * 72  # 144 points
+    
+    # Draw horizontal dotted lines only at the edges (2 inches from each side)
+    for y in y_coords:
+        # Left edge (first 2 inches)
+        overlay_canvas.line(0, y, edge_width_horizontal, y)
+        # Right edge (last 2 inches)
+        overlay_canvas.line(page_width - edge_width_horizontal, y, page_width, y)
+    
+    # Vertical lines: 1 inch on each end, 2 inches in the middle
+    edge_height_vertical = 1 * 72  # 72 points (1 inch)
+    middle_height = 2 * 72  # 144 points (2 inches)
+    middle_start = (page_height / 2) - (middle_height / 2)
+    middle_end = (page_height / 2) + (middle_height / 2)
+    
+    # Draw vertical dotted lines
+    for x in x_coords:
+        # Bottom edge (first 1 inch)
+        overlay_canvas.line(x, 0, x, edge_height_vertical)
+        # Top edge (last 1 inch)
+        overlay_canvas.line(x, page_height - edge_height_vertical, x, page_height)
+        # Middle section (2 inches in the center)
+        overlay_canvas.line(x, middle_start, x, middle_end)
+    
+    # Reset to solid lines and default color for any subsequent drawing
+    overlay_canvas.setDash([])
+
 def create_page_with_cards(page_card_ids, page_width, page_height, fronts_dir):
-    """Create a single page with up to 8 cards using card IDs"""
+    """Create a single page with up to 8 cards using card IDs, with edge cut lines on top"""
     # Define points with their coordinates (same as original)
     points = [
         ("A", 102.614358, 456.2361258),
@@ -151,44 +206,10 @@ def create_page_with_cards(page_card_ids, page_width, page_height, fronts_dir):
                 print(f"  Error processing {image_filename}: {e}")
                 continue
     
+    # Draw edge cut lines ON TOP of the cards
+    draw_edge_cut_lines(overlay_canvas, page_width, page_height)
+    
     overlay_canvas.save()
-    packet.seek(0)
-    return packet
-
-def create_edge_lines_overlay(page_width, page_height):
-    """Create an overlay with dotted lines at the edges for specific Y coordinates"""
-    # Define y coordinates for horizontal dotted lines (from reference code)
-    y_coords = [
-        580.9604567,
-        331.511795,
-        280.488205,
-        31.03954328,
-    ]
-    
-    # Create a canvas in memory for the lines
-    packet = BytesIO()
-    lines_canvas = canvas.Canvas(packet, pagesize=(page_width, page_height))
-    
-    # Set up line properties (same as reference code)
-    lines_canvas.setDash([4, 1])  # Set dash pattern: 4 points on, 1 point off
-    lines_canvas.setLineWidth(0.5)
-    lines_canvas.setStrokeColor(black)
-    
-    # Define edge margins (1-2 inches from each side)
-    left_margin = 72  # 1 inch from left edge
-    right_margin = 72  # 1 inch from right edge
-    edge_line_length = 144  # 2 inches long
-    
-    # Draw horizontal dotted lines at edges for each Y coordinate
-    for y in y_coords:
-        # Left edge line
-        lines_canvas.line(left_margin, y, left_margin + edge_line_length, y)
-        # Right edge line  
-        lines_canvas.line(page_width - right_margin - edge_line_length, y, page_width - right_margin, y)
-    
-    # Reset to solid lines
-    lines_canvas.setDash([])
-    lines_canvas.save()
     packet.seek(0)
     return packet
 
@@ -286,7 +307,7 @@ def main():
     template_page = template_reader.pages[0]
     
     # Generate uncompressed pages
-    print("\nGenerating uncompressed PDFs with edge lines...")
+    print("\nGenerating uncompressed PDFs with edge cut lines...")
     uncompressed_files = []
     
     for page_num in range(total_pages):
@@ -296,28 +317,19 @@ def main():
         
         print(f"Page {page_num + 1}: slots {start_slot}-{end_slot - 1}")
         
-        # Create overlay with cards (now uses card IDs)
-        cards_overlay_packet = create_page_with_cards(page_card_ids, page_width, page_height, fronts_dir)
+        # Create overlay with cards and edge cut lines
+        overlay_packet = create_page_with_cards(page_card_ids, page_width, page_height, fronts_dir)
         
-        # Create overlay with edge lines
-        lines_overlay_packet = create_edge_lines_overlay(page_width, page_height)
-        
-        # Merge template with cards overlay first
-        cards_overlay_reader = PdfReader(cards_overlay_packet)
+        # Merge with template
+        overlay_reader = PdfReader(overlay_packet)
         output_writer = PdfWriter()
         
-        # Copy template page and merge with cards overlay
+        # Copy template page and merge with overlay
         merged_page = template_page
-        if len(cards_overlay_reader.pages) > 0:
-            cards_overlay_page = cards_overlay_reader.pages[0]
+        if len(overlay_reader.pages) > 0:
+            overlay_page = overlay_reader.pages[0]
             merged_page = template_page
-            merged_page.merge_page(cards_overlay_page)
-        
-        # Then merge with lines overlay (lines on top)
-        lines_overlay_reader = PdfReader(lines_overlay_packet)
-        if len(lines_overlay_reader.pages) > 0:
-            lines_overlay_page = lines_overlay_reader.pages[0]
-            merged_page.merge_page(lines_overlay_page)
+            merged_page.merge_page(overlay_page)
         
         output_writer.add_page(merged_page)
         
@@ -372,7 +384,7 @@ def main():
     print(f"Compressed PDFs: {compressed_dir}")
     print(f"Total pages generated: {total_pages}")
     print(f"Total cards printed: {len(slot_list)}")
-    print(f"Added edge lines on first and last pages only at Y coordinates: 580.96, 331.51, 280.49, 31.04")
+    print("Note: Light gray dotted lines added at edges for cutting guides")
 
 if __name__ == "__main__":
     main()
