@@ -250,7 +250,8 @@ def main():
     output_dir = "./output"
     uncompressed_dir = os.path.join(output_dir, "uncompressed_pdfs")
     compressed_dir = os.path.join(output_dir, "compressed_pdfs")
-    final_pdf = os.path.join(output_dir, "fronts.pdf")
+    final_pdf_uncompressed = os.path.join(output_dir, "fronts_uncompressed.pdf")
+    final_pdf_compressed = os.path.join(output_dir, "fronts_compressed.pdf")
     
     # Offset configuration (can be modified here or passed as parameter)
     x_offset_cm = DEFAULT_OFFSET_CM  # Change this value to adjust offset
@@ -351,6 +352,20 @@ def main():
         uncompressed_files.append(uncompressed_file)
         print(f"  Saved: {uncompressed_file}")
     
+    # Combine all uncompressed pages into final uncompressed PDF
+    print(f"\nCombining {len(uncompressed_files)} uncompressed pages into final uncompressed PDF...")
+    final_writer_uncompressed = PdfWriter()
+    
+    for uncompressed_file in sorted(uncompressed_files):
+        reader = PdfReader(uncompressed_file)
+        for page in reader.pages:
+            final_writer_uncompressed.add_page(page)
+    
+    with open(final_pdf_uncompressed, 'wb') as output_file:
+        final_writer_uncompressed.write(output_file)
+    
+    print(f"Uncompressed final PDF saved: {final_pdf_uncompressed}")
+    
     # Compress PDFs if Ghostscript is available
     compressed_files = []
     if has_ghostscript:
@@ -364,34 +379,39 @@ def main():
                 print(f"  Compressed: {filename}")
             else:
                 print(f"  Failed to compress: {filename}")
-                # Use uncompressed version as fallback
-                shutil.copy2(uncompressed_file, compressed_file)
-                compressed_files.append(compressed_file)
+        
+        # Combine all compressed pages into final compressed PDF if compression was successful
+        if compressed_files:
+            print(f"\nCombining {len(compressed_files)} compressed pages into final compressed PDF...")
+            final_writer_compressed = PdfWriter()
+            
+            for compressed_file in sorted(compressed_files):
+                reader = PdfReader(compressed_file)
+                for page in reader.pages:
+                    final_writer_compressed.add_page(page)
+            
+            with open(final_pdf_compressed, 'wb') as output_file:
+                final_writer_compressed.write(output_file)
+            
+            print(f"Compressed final PDF saved: {final_pdf_compressed}")
+        else:
+            print("No compressed files were successfully created.")
     else:
         print("\nSkipping compression (Ghostscript not available)")
-        # Copy uncompressed files to compressed directory
-        for uncompressed_file in uncompressed_files:
-            filename = os.path.basename(uncompressed_file)
-            compressed_file = os.path.join(compressed_dir, filename)
-            shutil.copy2(uncompressed_file, compressed_file)
-            compressed_files.append(compressed_file)
     
-    # Combine all pages into final PDF
-    print(f"\nCombining {len(compressed_files)} pages into final PDF...")
-    final_writer = PdfWriter()
-    
-    for compressed_file in sorted(compressed_files):
-        reader = PdfReader(compressed_file)
-        for page in reader.pages:
-            final_writer.add_page(page)
-    
-    with open(final_pdf, 'wb') as output_file:
-        final_writer.write(output_file)
-    
+    # Final summary
+    # Final summary
     print(f"\nCompleted!")
-    print(f"Final PDF: {final_pdf}")
+    print(f"Uncompressed final PDF: {final_pdf_uncompressed}")
+    if has_ghostscript and compressed_files:
+        print(f"Compressed final PDF: {final_pdf_compressed}")
+    elif has_ghostscript:
+        print("Compressed final PDF: Not created (compression failed)")
+    else:
+        print("Compressed final PDF: Not created (Ghostscript not available)")
     print(f"Uncompressed PDFs: {uncompressed_dir}")
-    print(f"Compressed PDFs: {compressed_dir}")
+    if has_ghostscript:
+        print(f"Compressed PDFs: {compressed_dir}")
     print(f"Total pages generated: {total_pages}")
     print(f"Total cards printed: {len(slot_list)}")
     print(f"Note: Light gray dotted lines added at edges for cutting guides")
